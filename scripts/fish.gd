@@ -13,6 +13,19 @@ var world: Node  # main.gd
 
 var vel := Vector3.ZERO
 var phase := 0.0
+# Locomotion: the fish always moves along its body. Heading turns with a limited rate (smooth arcs);
+# speed comes in kicks followed by glides, like real fish.
+var yaw := 0.0
+var pitch := 0.0
+var yaw_rate := 0.0
+var roll := 0.0
+var speed := 0.0
+var thrust_t := 0.0
+var effort := 0.0  # 0 = gliding or hovering, 1 = hard swimming; drives the tail animation
+var hover_t := 0.0
+var hover_cool := 4.0
+var holder: Node3D
+var holder_basis := Basis()
 var target := Vector3.ZERO
 var wander_t := 0.0
 var startle_t := 0.0
@@ -51,7 +64,9 @@ func setup(record: Dictionary, main: Node, start: Vector3) -> void:
 	else:
 		_setup_procedural()
 	position = start
-	vel = Vector3(randf_range(-1, 1), 0, randf_range(-0.2, 0.2)).normalized() * float(spec.speed)
+	yaw = randf_range(0.0, TAU)
+	speed = float(spec.speed) * 0.5
+	hover_cool = randf_range(3.0, 10.0)
 	_pick_target()
 	label = Label3D.new()
 	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
@@ -66,9 +81,10 @@ func _setup_model(m: Dictionary) -> void:
 	var scene: PackedScene = load(m.path)
 	var model: Node3D = scene.instantiate()
 	# Turn the head to -Z, centre the rest pose on this node and scale to the tank length.
-	var holder := Node3D.new()
+	holder = Node3D.new()
 	var s: float = length / float(m.size)
-	holder.transform = Transform3D(Basis(Vector3.UP, deg_to_rad(float(m.yaw))).scaled(Vector3.ONE * s), Vector3.ZERO)
+	holder_basis = Basis(Vector3.UP, deg_to_rad(float(m.yaw))).scaled(Vector3.ONE * s)
+	holder.transform = Transform3D(holder_basis, Vector3.ZERO)
 	model.position = -m.center
 	holder.add_child(model)
 	add_child(holder)
@@ -86,6 +102,14 @@ func _setup_model(m: Dictionary) -> void:
 			var mat := gi.get_active_material(i)
 			if mat is BaseMaterial3D:
 				var dup: BaseMaterial3D = mat.duplicate()
+				var mname := String(mat.resource_name).to_lower()
+				if mname.contains("lens") or mname.contains("iris") or mname.contains("eye") or mname.contains("pupil"):
+					# Wet, glossy eyes catch a highlight and look alive instead of flat and staring.
+					dup.roughness = 0.04
+					dup.metallic_specular = 1.0
+					dup.clearcoat_enabled = true
+					dup.clearcoat = 1.0
+					dup.clearcoat_roughness = 0.02
 				gi.set_surface_override_material(i, dup)
 				model_mats.append([dup, dup.albedo_color, dup.transparency])
 
@@ -157,14 +181,68 @@ func _process(delta: float) -> void:
 		_die()
 		return
 	var desired := _steer(delta)
-	var max_speed: float = spec.max_speed
-	var accel := max_speed * (4.0 if startle_t > 0.0 else 1.6)
-	vel += (desired - vel).limit_length(accel * delta)
-	vel = vel.limit_length(max_speed)
-	position += vel * delta
+	_locomote(desired, delta)
 	_keep_inside()
-	_orient(delta)
 	_update_visuals(delta)
+
+
+func _locomote(desired: Vector3, delta: float) -> void:
+	var max_speed: float = spec.max_speed
+	var glide: float = spec.get("glide", 0.5)  # 0 = steady swimmer, 1 = strong kick-and-glide
+	var turn: float = spec.get("turn", 2.2)  # max turn rate, rad/s
+	var want := minf(desired.length(), max_speed)
+	var dir := desired / desired.length() if desired.length() > 0.001 else -transform.basis.z
+	var scared := startle_t > 0.0
+
+	# Now and then a calm fish pauses to hover, sculling with its fins.
+	hover_cool -= delta
+	if hover_t > 0.0:
+		hover_t -= delta
+		if not scared and want < max_speed * 0.7:
+			want *= 0.12
+	elif hover_cool <= 0.0:
+		hover_cool = randf_range(6.0, 16.0)
+		if randf() < float(spec.get("hover", 0.2)) and not scared:
+			hover_t = randf_range(2.0, 6.0)
+
+	# Turning: rate-limited and smoothed, so paths are arcs. A frightened fish snaps around.
+	var flat := Vector2(dir.x, dir.z)
+	if flat.length() > 0.05:
+		var err := wrapf(atan2(dir.x, dir.z) - yaw, -PI, PI)
+		var limit := turn * (3.0 if scared else 1.0)
+		var want_rate := clampf(err * 2.2, -limit, limit)
+		yaw_rate = lerpf(yaw_rate, want_rate, 1.0 - exp(-delta * (10.0 if scared else 3.5)))
+	else:
+		yaw_rate = lerpf(yaw_rate, 0.0, 1.0 - exp(-delta * 3.0))
+	yaw += yaw_rate * delta
+	var want_pitch := clampf(asin(clampf(dir.y, -1.0, 1.0)), -0.45, 0.45)
+	if hover_t > 0.0:
+		want_pitch *= 0.3
+	pitch = lerpf(pitch, want_pitch, 1.0 - exp(-delta * 1.6))
+	var heading := Vector3(sin(yaw) * cos(pitch), sin(pitch), cos(yaw) * cos(pitch))
+
+	# Speed: kick (accelerate with tail beats), then glide (coast with drag).
+	var target_speed := want * (1.0 - clampf(absf(yaw_rate) / 5.0, 0.0, 0.45))
+	if thrust_t > 0.0:
+		thrust_t -= delta
+	elif scared or speed < target_speed * (1.0 - 0.45 * glide) or glide < 0.25:
+		thrust_t = randf_range(0.3, 0.7) * (0.6 + glide) * (0.4 if scared else 1.0)
+	if thrust_t > 0.0:
+		var boost := 1.0 + 0.3 * glide
+		speed = move_toward(speed, target_speed * boost, max_speed * (5.0 if scared else 1.8) * delta)
+		effort = lerpf(effort, clampf(0.45 + 0.55 * speed / max_speed + (0.4 if scared else 0.0), 0.0, 1.4), 1.0 - exp(-delta * 8.0))
+	else:
+		speed = maxf(speed * exp(-delta * (0.5 + 0.5 * glide)), target_speed * 0.4)
+		effort = lerpf(effort, 0.12 if hover_t <= 0.0 else 0.22, 1.0 - exp(-delta * 3.0))
+	vel = heading * speed
+	position += vel * delta
+
+	# Orientation: face the heading, bank gently into turns.
+	var want_roll := clampf(-yaw_rate * 0.18 * clampf(speed / max_speed + 0.3, 0.0, 1.0), -0.35, 0.35)
+	roll = lerpf(roll, want_roll, 1.0 - exp(-delta * 3.0))
+	var b := Basis.looking_at(heading, Vector3.UP)
+	transform.basis = b * Basis(Vector3.FORWARD, roll)
+	turn_bend = lerpf(turn_bend, clampf(-yaw_rate * 0.15, -0.7, 0.7), 1.0 - exp(-delta * 4.0))
 
 
 func _steer(delta: float) -> Vector3:
@@ -191,6 +269,8 @@ func _steer(delta: float) -> Vector3:
 	if wander_t <= 0.0 or p.distance_to(target) < 0.6:
 		_pick_target()
 	var desired := (target - p).normalized() * cruise
+	# A slow meander so straight runs become lazy curves.
+	desired = desired.rotated(Vector3.UP, sin(Game.sim_time * 0.35 + float(rec.id) * 1.7) * 0.5)
 
 	# Food: hungrier fish care more and swim faster for it.
 	var appetite := clampf((95.0 - rec.satiety) / 45.0, 0.0, 1.0) * float(spec.greed)
@@ -273,6 +353,14 @@ func _steer(delta: float) -> Vector3:
 		if dist < reach and dist > 0.001:
 			desired += away / dist * (reach - dist) * 4.0
 
+	# Look ahead along the heading so turns start before the glass, not at it.
+	var ahead := p + vel * 1.2
+	var fy: float = world.tank.floor_height(ahead.x, ahead.z) + 0.5
+	if absf(ahead.x) > 5.0: desired.x -= signf(ahead.x) * float(spec.max_speed) * 0.8
+	if ahead.z > 1.5 or ahead.z < -1.8: desired.z -= signf(ahead.z) * float(spec.max_speed) * 0.6
+	if ahead.y < fy: desired.y += float(spec.max_speed) * 0.5
+	if ahead.y > 6.0: desired.y -= float(spec.max_speed) * 0.5
+
 	# Soft walls and floor.
 	var floor_y: float = world.tank.floor_height(p.x, p.z) + 0.25 + length * 0.2
 	if p.x > 5.4 - length * 0.3: desired.x -= (p.x - 5.4 + length * 0.3) * 3.0 + 1.0
@@ -295,22 +383,6 @@ func _keep_inside() -> void:
 	position.y = clampf(position.y, floor_y, 6.35)
 
 
-func _orient(delta: float) -> void:
-	var spd := vel.length()
-	if spd < 0.03:
-		return
-	var fwd := vel / spd
-	fwd.y = clampf(fwd.y, -0.5, 0.5)
-	fwd = fwd.normalized()
-	var target_basis := Basis.looking_at(fwd, Vector3.UP)
-	var q := Quaternion(transform.basis.orthonormalized())
-	var k := 1.0 - exp(-delta * (6.0 if startle_t > 0.0 else 3.0))
-	transform.basis = Basis(q.slerp(Quaternion(target_basis), k))
-	var yaw_rate := prev_fwd.signed_angle_to(fwd, Vector3.UP) / maxf(delta, 0.001)
-	prev_fwd = fwd
-	turn_bend = lerpf(turn_bend, clampf(-yaw_rate * 0.12, -0.7, 0.7), 1.0 - exp(-delta * 4.0))
-
-
 func _eat(food: Node3D) -> void:
 	world.remove_food(food)
 	Game.feed(rec, float(spec.food_value))
@@ -318,14 +390,12 @@ func _eat(food: Node3D) -> void:
 
 
 func _update_visuals(delta: float) -> void:
-	var spd := vel.length()
-	var max_speed: float = spec.max_speed
-	var effort := clampf(spd / max_speed, 0.0, 1.0)
-	var freq: float = float(spec.freq) * (0.55 + 1.3 * effort) * (1.0 + wiggle * 0.8)
+	var e := clampf(effort, 0.0, 1.4)
+	var freq: float = float(spec.freq) * (0.35 + 1.1 * e) * (1.0 + wiggle * 0.8)
 	if dead:
 		freq = 0.0
 	phase += TAU * freq * delta
-	var amp: float = float(spec.amp) * (0.55 + 0.8 * effort) * (1.0 + wiggle * 0.6)
+	var amp: float = float(spec.amp) * (0.35 + 0.9 * e) * (1.0 + wiggle * 0.6)
 	if dead:
 		amp = 0.0
 	var vitality := 1.0
@@ -334,13 +404,18 @@ func _update_visuals(delta: float) -> void:
 	if dead:
 		vitality = 0.15
 	if anim:
-		anim.speed_scale = 0.0 if dead else anim_base * (0.5 + 1.3 * effort) * (1.0 + wiggle * 0.8)
+		# Gliding fish barely move their tail; kicking fish beat it fast.
+		anim.speed_scale = 0.0 if dead else anim_base * (0.25 + 1.1 * e) * (1.0 + wiggle * 0.6)
+	if holder and not dead:
+		# The head sways a little with every tail beat.
+		var sway := sin(phase) * 0.05 * (0.3 + e)
+		holder.transform = Transform3D(Basis(Vector3.UP, sway) * holder_basis, Vector3.ZERO)
 	if model_mats.size() > 0 and (absf(vitality - _shown_vitality) > 0.02 or absf(fade - _shown_fade) > 0.01):
 		_shown_vitality = vitality
 		_shown_fade = fade
-		for e in model_mats:
-			var mat: BaseMaterial3D = e[0]
-			var orig: Color = e[1]
+		for entry in model_mats:
+			var mat: BaseMaterial3D = entry[0]
+			var orig: Color = entry[1]
 			# Hungry fish grow pale; dead fish fade out.
 			var c := orig.lerp(Color(0.62, 0.66, 0.7, orig.a), 1.0 - vitality)
 			c.a = orig.a * fade

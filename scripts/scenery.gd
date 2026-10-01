@@ -11,7 +11,9 @@ const MATERIAL_FROM := {"driftwood": "res://assets/raw/real_aquarium_wood_3d_sca
 const CAUSTICS := preload("res://shaders/caustics_overlay.gdshader")
 
 var tank: Node3D
-var obstacles: Array = []  # {pos: Vector3, radius: float}
+var obstacles: Array = []  # {pos: Vector3, radius: float} of visible solid pieces
+var extras := {}  # optional decorations: name -> [node]
+var _all_obstacles: Array = []  # {pos, radius, node}
 var _sway: Array = []  # {mm, base: Array[Transform3D], phase: Array[float], amount}
 var _caustic_mat: ShaderMaterial
 var rng := RandomNumberGenerator.new()
@@ -32,10 +34,15 @@ const HARDSCAPE := [
 	["moss_stone_12", 5.0, 0.7, -60.0, 0.9, 0.2, 0.0, 0.0, 0.4],
 	["moss_stone_8", 1.6, 1.6, 30.0, 0.45, 0.25, 0.0, 0.0, 0.0],
 	["moss_stone_10", -0.9, 1.8, 100.0, 0.4, 0.25, 0.0, 0.0, 0.0],
-	["shell", 0.9, 1.75, 35.0, 0.35, 0.15, 0.0, 0.0, 0.0],
 	["anubias", -1.9, -0.2, 20.0, 1.3, 0.05, 0.0, 0.0, 0.0],
 	["anubias", 3.0, -0.2, -50.0, 1.1, 0.05, 0.0, 0.0, 0.0],
 ]
+
+# Optional decorations, switched on and off from the panel (same fields as HARDSCAPE).
+const EXTRAS := {
+	"temple": ["temple", 1.9, 0.7, -25.0, 1.7, 0.04, 0.0, 0.0, 0.7],
+	"shell": ["shell", 0.9, 1.75, 35.0, 0.35, 0.15, 0.0, 0.0, 0.0],
+}
 
 # Planted groups: [piece, count, [[x, z, radius], ...], size range, sway, sink, avoid sand path]
 const PLANTS := [
@@ -57,6 +64,9 @@ func setup(t: Node3D) -> void:
 	_caustic_mat.shader = CAUSTICS
 	for h in HARDSCAPE:
 		_place(h)
+	for k in EXTRAS:
+		extras[k] = [_place(EXTRAS[k])]
+	refresh_obstacles()
 	for p in PLANTS:
 		_plant_group(p)
 
@@ -85,7 +95,11 @@ func _piece(name: String) -> Array:
 	return [mesh, mats]
 
 
-func _place(h: Array) -> void:
+func refresh_obstacles() -> void:
+	obstacles = _all_obstacles.filter(func(o): return o.node.visible).map(func(o): return {"pos": o.pos, "radius": o.radius})
+
+
+func _place(h: Array) -> MeshInstance3D:
 	var p := _piece(h[0])
 	var mi := MeshInstance3D.new()
 	mi.mesh = p[0]
@@ -103,7 +117,8 @@ func _place(h: Array) -> void:
 	add_child(mi)
 	var r: float = h[8]
 	if r > 0.0:
-		obstacles.append({"pos": Vector3(x, y + aabb.size.y * size * 0.45, z), "radius": r})
+		_all_obstacles.append({"pos": Vector3(x, y + aabb.size.y * size * 0.45, z), "radius": r, "node": mi})
+	return mi
 
 
 func _plant_group(g: Array) -> void:

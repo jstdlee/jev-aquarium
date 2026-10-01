@@ -32,6 +32,7 @@ var plant_mats: Array = []
 var ripples: Array = []  # Vector4(x, z, start, strength)
 var leaves: Array = []  # {pos, vel, rot, spin}
 var leaf_mm: MultiMesh
+var extras_nodes := {}  # extra name -> Array of nodes to show or hide
 var rng := RandomNumberGenerator.new()
 
 
@@ -49,6 +50,10 @@ func _ready() -> void:
 	_build_leaves()
 	for i in 8:
 		ripples.append(Vector4(0, 0, -100, 0))
+	for k in scenery.extras:
+		extras_nodes[k] = scenery.extras[k]
+	Game.extras_changed.connect(apply_extras)
+	apply_extras()
 
 
 ## Sand height at (x, z): rises toward the back with a mound under the driftwood.
@@ -240,6 +245,16 @@ func _update_reflection() -> void:
 	reflect_vp.size = Vector2i(maxi(64, int(vsize.x / 2)), maxi(36, int(vsize.y / 2)))
 	var vp: Projection = reflect_cam.get_camera_projection() * Projection(reflect_cam.global_transform.affine_inverse())
 	surface_mat.set_shader_parameter("reflect_vp", vp)
+
+
+func apply_extras() -> void:
+	for k in extras_nodes:
+		var on: bool = Game.settings.extras.get(k, true)
+		for n in extras_nodes[k]:
+			n.visible = on
+			if n is CPUParticles3D:
+				n.emitting = on
+	scenery.refresh_obstacles()
 
 
 func add_ripple(x: float, z: float, strength: float = 1.0) -> void:
@@ -453,6 +468,7 @@ func _build_rays() -> void:
 		mat.set_shader_parameter("strength", 0.13 + 0.05 * (i % 2))
 		var mi := _quad(Vector2(float(s[1]), 8.0), Vector3(float(s[0]), WATER_Y - 4.0, float(s[2])), Vector3(0, 0, -14), mat)
 		mi.name = "Ray%d" % i
+		extras_nodes.get_or_add("rays", []).append(mi)
 		i += 1
 
 
@@ -517,11 +533,13 @@ func _build_particles() -> void:
 	g.set_color(g.get_point_count() - 1, Color(1, 1, 1, 0))
 	motes.color_ramp = g
 	add_child(motes)
+	extras_nodes["sparkles"] = [motes]
 
 	# Air stone in the back right corner.
 	var air := make_bubbles(36, false)
 	air.position = Vector3(5.2, floor_height(5.2, -1.9) + 0.1, -1.9)
 	add_child(air)
+	extras_nodes["bubbles"] = [air]
 
 
 func _build_leaves() -> void:
@@ -545,6 +563,7 @@ func _build_leaves() -> void:
 	mmi.multimesh = leaf_mm
 	mmi.material_override = mat
 	add_child(mmi)
+	extras_nodes["leaves"] = [mmi]
 
 
 func _process(delta: float) -> void:

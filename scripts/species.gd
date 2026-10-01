@@ -10,6 +10,7 @@ const ORDER := ["goldfish", "oranda", "betta", "discus", "guppy", "neon"]
 
 const DATA := {
 	"goldfish": {
+		"glide": 0.6, "turn": 1.8, "hover": 0.3,
 		"name": "Jikin Goldfish",
 		"model": {"path": "res://assets/raw/jikin_goldfish.glb", "yaw": 180.0, "center": Vector3(2.09, 0.09, -3.25), "size": 13.1, "anim_speed": 1.0},
 		"length": 1.25, "height_ratio": 0.5, "width_ratio": 0.62, "peak": 0.38, "stem": 0.22,
@@ -26,6 +27,7 @@ const DATA := {
 		"depth": Vector2(1.0, 5.6), "drain": 1.0, "food_value": 6.0, "weight": 3.0, "default_count": 2,
 	},
 	"oranda": {
+		"glide": 0.75, "turn": 1.5, "hover": 0.45,
 		"name": "Redcap Oranda",
 		"model": {"path": "res://assets/raw/redcap_oranda_goldfish.glb", "yaw": 180.0, "center": Vector3(0.72, -1.6, -4.56), "size": 13.8, "anim_speed": 0.9},
 		"length": 1.35, "height_ratio": 0.66, "width_ratio": 0.8, "peak": 0.42, "stem": 0.24,
@@ -42,6 +44,7 @@ const DATA := {
 		"depth": Vector2(0.8, 4.6), "drain": 1.0, "food_value": 6.0, "weight": 2.0, "default_count": 2,
 	},
 	"betta": {
+		"glide": 0.85, "turn": 1.3, "hover": 0.6,
 		"name": "Betta",
 		"model": {"path": "res://assets/raw/betta_splendens.glb", "yaw": 180.0, "center": Vector3(0.0, 0.67, -0.15), "size": 6.5, "anim_speed": 0.8},
 		"length": 1.5, "height_ratio": 0.3, "width_ratio": 0.5, "peak": 0.3, "stem": 0.3,
@@ -58,6 +61,7 @@ const DATA := {
 		"depth": Vector2(3.0, 6.0), "drain": 0.8, "food_value": 7.0, "weight": 1.0, "default_count": 1, "max_count": 1,
 	},
 	"discus": {
+		"glide": 0.7, "turn": 1.6, "hover": 0.5,
 		"name": "Discus",
 		"model": {"path": "res://assets/fish/discus.glb", "yaw": -90.0, "center": Vector3(15.0, 56.7, -6.2), "size": 100.0, "anim_speed": 0.7},
 		"length": 1.3, "height_ratio": 0.92, "width_ratio": 0.3, "peak": 0.45, "stem": 0.16,
@@ -74,8 +78,9 @@ const DATA := {
 		"depth": Vector2(2.4, 5.6), "drain": 0.9, "food_value": 7.0, "weight": 2.0, "default_count": 2,
 	},
 	"guppy": {
+		"glide": 0.35, "turn": 3.0, "hover": 0.15,
 		"name": "Fancy Guppy",
-		"model": {"path": "res://assets/raw/guppy_fish.glb", "yaw": 0.0, "center": Vector3(-0.55, 0.07, -1.1), "size": 8.2, "anim_speed": 1.2},
+		"model": {"path": "res://assets/fish/guppy.glb", "yaw": 0.0, "center": Vector3(-0.55, 0.07, -1.1), "size": 8.2, "anim_speed": 1.2},
 		"length": 0.65, "height_ratio": 0.32, "width_ratio": 0.55, "peak": 0.3, "stem": 0.28,
 		"belly_drop": 0.15, "blunt": 0.25,
 		"tail": {"type": "veil", "len": 0.95, "spread": 1.0},
@@ -90,6 +95,7 @@ const DATA := {
 		"depth": Vector2(3.2, 6.1), "drain": 1.1, "food_value": 9.0, "weight": 3.0, "default_count": 4,
 	},
 	"neon": {
+		"glide": 0.2, "turn": 3.6, "hover": 0.05,
 		"name": "Neon Tetra",
 		"model": {"path": "res://assets/raw/paracheirodon_innesi___tetra_neon.glb", "yaw": 180.0, "center": Vector3(0.0, -0.03, -0.15), "size": 8.6, "anim_speed": 1.4},
 		"length": 0.45, "height_ratio": 0.27, "width_ratio": 0.6, "peak": 0.35, "stem": 0.26,

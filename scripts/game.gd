@@ -3,6 +3,9 @@ extends Node
 
 signal fish_died(rec: Dictionary, offline: bool)
 signal population_reset
+signal fish_added(rec: Dictionary)
+signal fish_removed(rec: Dictionary)
+signal extras_changed
 
 const SpeciesDB = preload("res://scripts/species.gd")
 
@@ -27,6 +30,12 @@ var settings := {
 	"fixed_counts": {},
 	"care_mode": "normal",  # "normal", "relaxed" or "peaceful"
 	"time_scale": 1.0,  # hunger speed-up, for testing
+	"extras": {},
+}
+
+const EXTRAS_DEFAULT := {
+	"temple": false, "shell": true, "toy": false, "bubbles": true,
+	"leaves": true, "rays": true, "sparkles": true,
 }
 var fish_records: Array = []
 var memorial: Array = []
@@ -54,6 +63,9 @@ func _ready() -> void:
 		settings.fixed_counts[id] = SpeciesDB.get_spec(id).default_count
 	if fresh or not load_game():
 		generate_population()
+	for k in EXTRAS_DEFAULT:
+		if not settings.extras.has(k):
+			settings.extras[k] = EXTRAS_DEFAULT[k]
 	get_tree().set_auto_accept_quit(false)
 
 
@@ -189,6 +201,39 @@ func generate_population() -> void:
 			n += 1
 	population_reset.emit()
 	save_game()
+
+
+func count_alive(species: String) -> int:
+	var n := 0
+	for r in fish_records:
+		if r.alive and r.species == species:
+			n += 1
+	return n
+
+
+func add_fish(species: String) -> void:
+	if alive_records().size() >= MAX_FISH:
+		return
+	if count_alive(species) >= int(SpeciesDB.get_spec(species).get("max_count", 20)):
+		return
+	var rec := _new_record(species)
+	fish_records.append(rec)
+	fish_added.emit(rec)
+
+
+## Rehomes one fish of this species (it simply leaves the tank; this is not a death).
+func remove_fish(species: String) -> void:
+	for i in range(fish_records.size() - 1, -1, -1):
+		var r: Dictionary = fish_records[i]
+		if r.alive and r.species == species:
+			fish_records.remove_at(i)
+			fish_removed.emit(r)
+			return
+
+
+func set_extra(key: String, on: bool) -> void:
+	settings.extras[key] = on
+	extras_changed.emit()
 
 
 func alive_records() -> Array:

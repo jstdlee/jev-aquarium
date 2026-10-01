@@ -13,6 +13,7 @@ const Food = preload("res://scripts/food.gd")
 const Toy = preload("res://scripts/toy.gd")
 const Ring = preload("res://scripts/ring.gd")
 const Menu = preload("res://scripts/settings_menu.gd")
+const TankPanel = preload("res://scripts/tank_panel.gd")
 const RING_SHADER := preload("res://shaders/ring.gdshader")
 
 const MULTI_CLICK := 0.33
@@ -44,8 +45,12 @@ func _ready() -> void:
 	_build_finger()
 	_build_ui()
 	Game.population_reset.connect(_respawn_all)
+	Game.fish_added.connect(_spawn)
+	Game.fish_removed.connect(_on_fish_removed)
+	Game.extras_changed.connect(_apply_toy)
 	Game.fish_died.connect(_on_fish_died)
 	_respawn_all()
+	_apply_toy()
 	if not Game.offline_deaths.is_empty():
 		var names := ", ".join(PackedStringArray(Game.offline_deaths.map(func(r): return r.name)))
 		_show_toast("While you were away, %s passed away. They are remembered in the settings menu." % names)
@@ -68,6 +73,7 @@ func _build_finger() -> void:
 func _build_ui() -> void:
 	menu = Menu.new()
 	add_child(menu)
+	add_child(TankPanel.new())
 	var layer := CanvasLayer.new()
 	add_child(layer)
 	toast = Label.new()
@@ -98,14 +104,34 @@ func _respawn_all() -> void:
 		f.queue_free()
 	fishes.clear()
 	for rec in Game.alive_records():
-		var sp: Dictionary = SpeciesDB.get_spec(rec.species)
-		var d: Vector2 = sp.depth
-		var start := Vector3(randf_range(-4.8, 4.8), randf_range(d.x, d.y), randf_range(-1.4, 1.6))
-		start.y = maxf(start.y, tank.floor_height(start.x, start.z) + 0.6)
-		var f := Fish.new()
-		add_child(f)
-		f.setup(rec, self, start)
-		fishes.append(f)
+		_spawn(rec)
+
+
+func _spawn(rec: Dictionary) -> void:
+	var sp: Dictionary = SpeciesDB.get_spec(rec.species)
+	var d: Vector2 = sp.depth
+	var start := Vector3(randf_range(-4.8, 4.8), randf_range(d.x, d.y), randf_range(-1.4, 1.4))
+	start.y = maxf(start.y, tank.floor_height(start.x, start.z) + 0.6)
+	var f := Fish.new()
+	add_child(f)
+	f.setup(rec, self, start)
+	fishes.append(f)
+
+
+func _on_fish_removed(rec: Dictionary) -> void:
+	for f in fishes:
+		if f.rec == rec:
+			remove_fish(f)
+			return
+
+
+func _apply_toy() -> void:
+	var want: bool = Game.settings.extras.get("toy", false)
+	if want and toy == null:
+		_drop_toy(Vector3(randf_range(-3.0, 3.0), 4.0, 0.6))
+	elif not want and toy != null:
+		toy.queue_free()
+		toy = null
 
 
 func _on_fish_died(rec: Dictionary, offline: bool) -> void:
@@ -250,6 +276,7 @@ func _on_click(screen: Vector2) -> void:
 			_bubble_burst(inside)
 			if toy == null:
 				_drop_toy(inside)
+				Game.settings.extras["toy"] = true
 
 
 func _stir(screen: Vector2, rel: Vector2) -> void:
