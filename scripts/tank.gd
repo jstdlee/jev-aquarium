@@ -254,7 +254,9 @@ func apply_extras() -> void:
 			n.visible = on
 			if n is CPUParticles3D:
 				n.emitting = on
-	scenery.refresh_obstacles()
+			# Hidden pieces must not block fish or catch food.
+			for cs in n.find_children("*", "CollisionShape3D", true, false):
+				cs.set_deferred("disabled", not on)
 
 
 func add_ripple(x: float, z: float, strength: float = 1.0) -> void:

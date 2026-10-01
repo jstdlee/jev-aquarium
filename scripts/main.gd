@@ -110,8 +110,19 @@ func _respawn_all() -> void:
 func _spawn(rec: Dictionary) -> void:
 	var sp: Dictionary = SpeciesDB.get_spec(rec.species)
 	var d: Vector2 = sp.depth
-	var start := Vector3(randf_range(-4.8, 4.8), randf_range(d.x, d.y), randf_range(-1.4, 1.4))
-	start.y = maxf(start.y, tank.floor_height(start.x, start.z) + 0.6)
+	# Pick a start point in open water, not inside wood or rock.
+	var start := Vector3.ZERO
+	var space := get_world_3d().direct_space_state
+	var probe := PhysicsShapeQueryParameters3D.new()
+	var sphere := SphereShape3D.new()
+	sphere.radius = float(sp.length) * 0.6
+	probe.shape = sphere
+	for attempt in 20:
+		start = Vector3(randf_range(-4.8, 4.8), randf_range(d.x, d.y), randf_range(-1.4, 1.4))
+		start.y = maxf(start.y, tank.floor_height(start.x, start.z) + 0.6)
+		probe.transform = Transform3D(Basis(), start)
+		if space.intersect_shape(probe, 1).is_empty():
+			break
 	var f := Fish.new()
 	add_child(f)
 	f.setup(rec, self, start)

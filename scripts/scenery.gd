@@ -2,7 +2,7 @@ extends Node3D
 ## Real scenery: scanned driftwood and rocks (Poly Haven, CC0) and artist-made aquarium plants
 ## (Sketchfab, CC-BY), prepared by tools/prep_scenery.py into assets/scenery/ (base at origin,
 ## largest dimension 1). This script lays them out in the Lantern Garden composition.
-## Repeated plants are drawn with MultiMesh and sway; solid pieces register obstacles for the fish.
+## Repeated plants are drawn with MultiMesh and sway; solid pieces get collision meshes from their geometry.
 
 const DIR := "res://assets/scenery/"
 # Pieces whose source uses the spec-gloss material that Blender drops: take the material from the
@@ -11,9 +11,7 @@ const MATERIAL_FROM := {"driftwood": "res://assets/raw/real_aquarium_wood_3d_sca
 const CAUSTICS := preload("res://shaders/caustics_overlay.gdshader")
 
 var tank: Node3D
-var obstacles: Array = []  # {pos: Vector3, radius: float} of visible solid pieces
-var extras := {}  # optional decorations: name -> [node]
-var _all_obstacles: Array = []  # {pos, radius, node}
+var extras := {}  # group name -> [nodes], switched on and off from Settings
 var _sway: Array = []  # {mm, base: Array[Transform3D], phase: Array[float], amount}
 var _caustic_mat: ShaderMaterial
 var rng := RandomNumberGenerator.new()
@@ -38,7 +36,19 @@ const HARDSCAPE := [
 	["anubias", 3.0, -0.2, -50.0, 1.1, 0.05, 0.0, 0.0, 0.0],
 ]
 
-# Optional decorations, switched on and off from the panel (same fields as HARDSCAPE).
+# Every piece belongs to a group that can be switched on or off in Settings (Game.settings.extras).
+const GROUP_OF := {
+	"driftwood": "driftwood", "quiver_branch": "driftwood", "trunk": "driftwood",
+	"branch_a": "branches", "branch_b": "branches",
+	"dragon_stones": "stones", "boulder": "stones",
+	"moss_rock_1": "moss_rocks", "moss_rock_3": "moss_rocks", "moss_rock_4": "moss_rocks",
+	"moss_stone_8": "pebbles", "moss_stone_9": "pebbles", "moss_stone_10": "pebbles", "moss_stone_12": "pebbles",
+	"anubias": "anubias", "temple": "temple", "shell": "shell",
+	"vallisneria": "vallisneria", "fern_big": "ferns", "fern_wide": "ferns", "pack_universal": "bushes",
+	"java_fern": "java_fern", "red_tiger_lotus": "red_lotus", "staurogyne": "carpet", "staurogyne_b": "carpet",
+}
+
+# Optional decorations (same fields as HARDSCAPE).
 const EXTRAS := {
 	"temple": ["temple", 1.9, 0.7, -25.0, 1.7, 0.04, 0.0, 0.0, 0.7],
 	"shell": ["shell", 0.9, 1.75, 35.0, 0.35, 0.15, 0.0, 0.0, 0.0],
@@ -63,12 +73,18 @@ func setup(t: Node3D) -> void:
 	_caustic_mat = ShaderMaterial.new()
 	_caustic_mat.shader = CAUSTICS
 	for h in HARDSCAPE:
-		_place(h)
+		_add_to_group(h[0], _place(h))
 	for k in EXTRAS:
-		extras[k] = [_place(EXTRAS[k])]
-	refresh_obstacles()
+		_add_to_group(k, _place(EXTRAS[k]))
 	for p in PLANTS:
-		_plant_group(p)
+		_add_to_group(p[0], _plant_group(p))
+
+
+func _add_to_group(piece: String, node: Node3D) -> void:
+	var g: String = GROUP_OF.get(piece, piece)
+	if not extras.has(g):
+		extras[g] = []
+	extras[g].append(node)
 
 
 func _piece(name: String) -> Array:
@@ -95,10 +111,6 @@ func _piece(name: String) -> Array:
 	return [mesh, mats]
 
 
-func refresh_obstacles() -> void:
-	obstacles = _all_obstacles.filter(func(o): return o.node.visible).map(func(o): return {"pos": o.pos, "radius": o.radius})
-
-
 func _place(h: Array) -> MeshInstance3D:
 	var p := _piece(h[0])
 	var mi := MeshInstance3D.new()
@@ -115,13 +127,16 @@ func _place(h: Array) -> MeshInstance3D:
 	var y: float = tank.floor_height(x, z) - aabb.size.y * size * float(h[5])
 	mi.transform = Transform3D(b, Vector3(x, y, z))
 	add_child(mi)
-	var r: float = h[8]
-	if r > 0.0:
-		_all_obstacles.append({"pos": Vector3(x, y + aabb.size.y * size * 0.45, z), "radius": r, "node": mi})
+	# Solid: a collision mesh from the real geometry. Fish feel it with rays; food lands on it.
+	var body := StaticBody3D.new()
+	var cs := CollisionShape3D.new()
+	cs.shape = mi.mesh.create_trimesh_shape()
+	body.add_child(cs)
+	mi.add_child(body)
 	return mi
 
 
-func _plant_group(g: Array) -> void:
+func _plant_group(g: Array) -> Node3D:
 	var p := _piece(g[0])
 	var count: int = g[1]
 	var clusters: Array = g[2]
@@ -160,6 +175,7 @@ func _plant_group(g: Array) -> void:
 	mmi.multimesh = mm
 	add_child(mmi)
 	_sway.append({"mm": mm, "base": placed, "phase": phases, "amount": float(g[4])})
+	return mmi
 
 
 func _process(_delta: float) -> void:

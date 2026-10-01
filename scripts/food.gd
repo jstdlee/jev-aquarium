@@ -39,7 +39,14 @@ func _process(delta: float) -> void:
 	vel.x = lerpf(vel.x, cur.x * 0.8, 1.0 - exp(-delta * 2.0))
 	vel.z = lerpf(vel.z, cur.z * 0.8, 1.0 - exp(-delta * 2.0))
 	wobble += delta * 2.5
-	position += (vel + Vector3(sin(wobble) * 0.08, 0, cos(wobble * 0.7) * 0.05)) * delta
+	var step := (vel + Vector3(sin(wobble) * 0.08, 0, cos(wobble * 0.7) * 0.05)) * delta
+	# Land on wood and rocks, not through them.
+	var hit := get_world_3d().direct_space_state.intersect_ray(PhysicsRayQueryParameters3D.create(position, position + step + Vector3(0, -0.03, 0)))
+	if hit:
+		position = hit.position + Vector3(0, 0.03, 0)
+		settled = true
+		return
+	position += step
 	position.x = clampf(position.x, -5.8, 5.8)
 	position.z = clampf(position.z, -2.3, 2.3)
 	rotate_y(delta * 1.5)

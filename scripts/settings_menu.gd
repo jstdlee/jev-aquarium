@@ -15,6 +15,14 @@ var speed_opt: OptionButton
 var memorial_label: Label
 
 const SPEEDS := [1.0, 60.0, 600.0, 3600.0]
+const DECOR := [
+	["driftwood", "Driftwood"], ["branches", "Branches"], ["stones", "Stone cluster"], ["moss_rocks", "Mossy rocks"],
+	["pebbles", "Pebbles"], ["temple", "Temple ruin"], ["shell", "Sea shell"], ["anubias", "Anubias"],
+	["vallisneria", "Vallisneria"], ["ferns", "Ferns"], ["bushes", "Bushy plants"], ["java_fern", "Java fern"],
+	["red_lotus", "Red tiger lotus"], ["carpet", "Carpet plants"], ["leaves", "Floating leaves"], ["bubbles", "Air bubbles"],
+	["rays", "Light rays"], ["sparkles", "Sparkles"], ["toy", "Beach ball"],
+]
+var decor_checks := {}
 
 
 func _ready() -> void:
@@ -24,7 +32,7 @@ func _ready() -> void:
 	panel.anchor_right = 0.5
 	panel.anchor_top = 0.5
 	panel.anchor_bottom = 0.5
-	panel.custom_minimum_size = Vector2(460, 0)
+	panel.custom_minimum_size = Vector2(560, 0)
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = Color(0.08, 0.1, 0.08, 0.86)
 	sb.set_corner_radius_all(14)
@@ -61,6 +69,23 @@ func _ready() -> void:
 	restock.text = "Restock tank with these settings"
 	restock.pressed.connect(_restock)
 	v.add_child(restock)
+
+	v.add_child(HSeparator.new())
+	var decor_title := Label.new()
+	decor_title.text = "Aquarium"
+	decor_title.add_theme_color_override("font_color", Color(1.0, 0.92, 0.7))
+	v.add_child(decor_title)
+	var grid := GridContainer.new()
+	grid.columns = 3
+	grid.add_theme_constant_override("h_separation", 10)
+	for d in DECOR:
+		var c := CheckBox.new()
+		c.text = d[1]
+		c.add_theme_font_size_override("font_size", 13)
+		c.toggled.connect(func(on: bool): Game.set_extra(d[0], on))
+		decor_checks[d[0]] = c
+		grid.add_child(c)
+	v.add_child(grid)
 
 	v.add_child(HSeparator.new())
 	care_opt = OptionButton.new()
@@ -165,6 +190,8 @@ func _load_from_settings() -> void:
 	speed_opt.selected = maxi(0, SPEEDS.find(float(s.time_scale)))
 	var names: Array = Game.memorial.map(func(m): return "%s (%s)" % [m.name, SpeciesDB.get_spec(m.species).name])
 	memorial_label.text = "" if names.is_empty() else "Remembered: " + ", ".join(PackedStringArray(names))
+	for k in decor_checks:
+		decor_checks[k].set_pressed_no_signal(bool(Game.settings.extras.get(k, true)))
 	_sync_visibility()
 
 

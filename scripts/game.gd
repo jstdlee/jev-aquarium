@@ -36,6 +36,9 @@ var settings := {
 const EXTRAS_DEFAULT := {
 	"temple": false, "shell": true, "toy": false, "bubbles": true,
 	"leaves": true, "rays": true, "sparkles": true,
+	"driftwood": true, "branches": true, "stones": true, "moss_rocks": true, "pebbles": true,
+	"anubias": true, "vallisneria": true, "ferns": true, "bushes": true, "java_fern": true,
+	"red_lotus": true, "carpet": true,
 }
 var fish_records: Array = []
 var memorial: Array = []

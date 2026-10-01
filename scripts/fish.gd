@@ -6,6 +6,7 @@ const SpeciesDB = preload("res://scripts/species.gd")
 const BODY_SHADER := preload("res://shaders/fish_body.gdshader")
 const FIN_SHADER := preload("res://shaders/fish_fin.gdshader")
 const EYE_SHADER := preload("res://shaders/fish_eye.gdshader")
+const SwimSpine = preload("res://scripts/swim_spine.gd")
 
 var rec: Dictionary
 var spec: Dictionary
@@ -20,11 +21,14 @@ var pitch := 0.0
 var yaw_rate := 0.0
 var roll := 0.0
 var speed := 0.0
-var thrust_t := 0.0
+var kick := -1.0  # 0..1 progress through the current tail kick, < 0 when coasting
+var kick_len := 0.5
+var kick_power := 0.0
 var effort := 0.0  # 0 = gliding or hovering, 1 = hard swimming; drives the tail animation
 var hover_t := 0.0
 var hover_cool := 4.0
 var holder: Node3D
+var spine: SkeletonModifier3D  # procedural spine and fins (artist models)
 var holder_basis := Basis()
 var target := Vector3.ZERO
 var wander_t := 0.0
@@ -64,6 +68,8 @@ func setup(record: Dictionary, main: Node, start: Vector3) -> void:
 	else:
 		_setup_procedural()
 	position = start
+	if spine:
+		spine.find_bones()
 	yaw = randf_range(0.0, TAU)
 	speed = float(spec.speed) * 0.5
 	hover_cool = randf_range(3.0, 10.0)
@@ -95,6 +101,14 @@ func _setup_model(m: Dictionary) -> void:
 		anim.play(anim_name)
 		anim.seek(randf() * anim.current_animation_length, true)
 		anim_base = float(m.get("anim_speed", 1.0))
+	var skels := model.find_children("*", "Skeleton3D", true, false)
+	if not skels.is_empty() and anim and bool(spec.get("procedural", true)):
+		# Procedural swimming replaces the canned loop: hold its first pose and bend the spine live.
+		anim.seek(0.0, true)
+		anim.speed_scale = 0.0
+		spine = SwimSpine.new()
+		skels[0].add_child(spine)
+		spine.setup(self, float(spec.get("spine", 0.45)))
 	for mi in model.find_children("*", "MeshInstance3D", true, false):
 		var gi := mi as MeshInstance3D
 		gi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
@@ -181,7 +195,9 @@ func _process(delta: float) -> void:
 		_die()
 		return
 	var desired := _steer(delta)
+	var prev := position
 	_locomote(desired, delta)
+	_resolve_contacts(prev)
 	_keep_inside()
 	_update_visuals(delta)
 
@@ -210,8 +226,8 @@ func _locomote(desired: Vector3, delta: float) -> void:
 	if flat.length() > 0.05:
 		var err := wrapf(atan2(dir.x, dir.z) - yaw, -PI, PI)
 		var limit := turn * (3.0 if scared else 1.0)
-		var want_rate := clampf(err * 2.2, -limit, limit)
-		yaw_rate = lerpf(yaw_rate, want_rate, 1.0 - exp(-delta * (10.0 if scared else 3.5)))
+		var want_rate := clampf(err * 1.6, -limit, limit)
+		yaw_rate = lerpf(yaw_rate, want_rate, 1.0 - exp(-delta * (8.0 if scared else 2.2)))
 	else:
 		yaw_rate = lerpf(yaw_rate, 0.0, 1.0 - exp(-delta * 3.0))
 	yaw += yaw_rate * delta
@@ -221,19 +237,26 @@ func _locomote(desired: Vector3, delta: float) -> void:
 	pitch = lerpf(pitch, want_pitch, 1.0 - exp(-delta * 1.6))
 	var heading := Vector3(sin(yaw) * cos(pitch), sin(pitch), cos(yaw) * cos(pitch))
 
-	# Speed: kick (accelerate with tail beats), then glide (coast with drag).
+	# Speed: smooth thrust pulses from the tail against water drag. Each kick rises and falls
+	# (sin^2 envelope), so speed and acceleration change continuously - no lurches.
 	var target_speed := want * (1.0 - clampf(absf(yaw_rate) / 5.0, 0.0, 0.45))
-	if thrust_t > 0.0:
-		thrust_t -= delta
-	elif scared or speed < target_speed * (1.0 - 0.45 * glide) or glide < 0.25:
-		thrust_t = randf_range(0.3, 0.7) * (0.6 + glide) * (0.4 if scared else 1.0)
-	if thrust_t > 0.0:
-		var boost := 1.0 + 0.3 * glide
-		speed = move_toward(speed, target_speed * boost, max_speed * (5.0 if scared else 1.8) * delta)
-		effort = lerpf(effort, clampf(0.45 + 0.55 * speed / max_speed + (0.4 if scared else 0.0), 0.0, 1.4), 1.0 - exp(-delta * 8.0))
-	else:
-		speed = maxf(speed * exp(-delta * (0.5 + 0.5 * glide)), target_speed * 0.4)
-		effort = lerpf(effort, 0.12 if hover_t <= 0.0 else 0.22, 1.0 - exp(-delta * 3.0))
+	var drag := 0.7 + 0.7 * glide
+	if kick < 0.0 and (scared or speed < target_speed * (1.0 - 0.4 * glide) or glide < 0.25):
+		kick = 0.0
+		kick_len = (0.25 if scared else randf_range(0.45, 0.8) * (0.7 + glide))
+		# Enough push that the kick averages out at the wanted speed (plus a little for the glide).
+		kick_power = maxf(target_speed - speed * exp(-drag * kick_len * 0.5), 0.0) * drag * (2.2 + glide) + (max_speed * 3.0 if scared else 0.0)
+	var env := 0.0
+	if kick >= 0.0:
+		kick += delta / kick_len
+		env = pow(sin(PI * clampf(kick, 0.0, 1.0)), 2.0)
+		if kick >= 1.0:
+			kick = -1.0
+	speed += (env * kick_power - drag * speed) * delta
+	speed = clampf(speed, 0.0, max_speed * (1.3 if scared else 1.0))
+	# Tail effort follows the kick; while coasting the fins keep a slow idle beat.
+	var want_effort := env * clampf(0.5 + kick_power / (max_speed * drag * 2.0), 0.4, 1.4) + (0.12 if hover_t <= 0.0 else 0.22)
+	effort = lerpf(effort, want_effort, 1.0 - exp(-delta * 4.0))
 	vel = heading * speed
 	position += vel * delta
 
@@ -345,13 +368,8 @@ func _steer(delta: float) -> Vector3:
 		desired += (coh / n) * 0.6 * school
 	desired += sep * 1.4
 
-	# Steer around rocks and wood.
-	for o in world.tank.scenery.obstacles:
-		var away: Vector3 = p - o.pos
-		var reach: float = float(o.radius) + length * 0.5 + 0.3
-		var dist := away.length()
-		if dist < reach and dist > 0.001:
-			desired += away / dist * (reach - dist) * 4.0
+	# Feel ahead with three whisker rays and turn away from wood, rocks and decorations.
+	desired += _whiskers(p)
 
 	# Look ahead along the heading so turns start before the glass, not at it.
 	var ahead := p + vel * 1.2
@@ -374,6 +392,42 @@ func _steer(delta: float) -> Vector3:
 	# Prefer swimming across the glass so fish show their side.
 	desired.z *= 0.6
 	return desired
+
+
+func _whiskers(p: Vector3) -> Vector3:
+	var space := get_world_3d().direct_space_state
+	var heading := -transform.basis.z
+	var reach := length * 0.8 + speed * 1.1 + 0.3
+	var push := Vector3.ZERO
+	for a in [0.0, 0.5, -0.5]:
+		var dir := heading.rotated(Vector3.UP, a)
+		var q := PhysicsRayQueryParameters3D.create(p, p + dir * reach * (1.0 if a == 0.0 else 0.7))
+		var hit := space.intersect_ray(q)
+		if hit:
+			var closeness := 1.0 - p.distance_to(hit.position) / reach
+			var n: Vector3 = hit.normal
+			# Away from the surface, and sideways toward the freer side.
+			push += (n + heading.cross(Vector3.UP) * signf(a if a != 0.0 else 0.3)) * closeness * float(spec.max_speed) * 2.2
+	return push
+
+
+## If the fish ended up touching a solid piece, slide it back out along the surface.
+func _resolve_contacts(prev: Vector3) -> void:
+	var space := get_world_3d().direct_space_state
+	var sphere := SphereShape3D.new()
+	sphere.radius = length * 0.22
+	var q := PhysicsShapeQueryParameters3D.new()
+	q.shape = sphere
+	q.transform = Transform3D(Basis(), position)
+	var info := space.get_rest_info(q)
+	if info.is_empty():
+		return
+	var n: Vector3 = info.normal
+	var move := position - prev
+	if move.dot(n) < 0.0:
+		move -= n * move.dot(n)  # keep only the sliding part
+	position = prev + move + n * 0.01
+	speed *= 0.85
 
 
 func _keep_inside() -> void:
@@ -403,9 +457,10 @@ func _update_visuals(delta: float) -> void:
 		vitality = lerpf(0.25, 1.0, rec.satiety / Game.STAGE_HUNGRY)
 	if dead:
 		vitality = 0.15
-	if anim:
+	if anim and not spine:
 		# Gliding fish barely move their tail; kicking fish beat it fast.
-		anim.speed_scale = 0.0 if dead else anim_base * (0.25 + 1.1 * e) * (1.0 + wiggle * 0.6)
+		var want_anim := 0.0 if dead else anim_base * (0.25 + 1.1 * e) * (1.0 + wiggle * 0.6)
+		anim.speed_scale = lerpf(anim.speed_scale, want_anim, 1.0 - exp(-delta * 3.0))
 	if holder and not dead:
 		# The head sways a little with every tail beat.
 		var sway := sin(phase) * 0.05 * (0.3 + e)

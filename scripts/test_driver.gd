@@ -4,12 +4,16 @@ extends Node
 ## Steps: wait:N (frames)  sleep:S (seconds)  move:x,y  click:x,y  dclick:x,y  tclick:x,y
 ##        drag:x1,y1,x2,y2,frames  key:esc|f1  speed:N  shot:path  quit
 ##        stock:goldfish=1,neon=8  (fixed population)   cam:x,y,z,fov  (move the camera, for close-ups)
+##        log:path  (write every fish's motion each frame as CSV, until quit)
+## With --fixed-fps / --write-movie, use wait:N (frames); sleep uses wall-clock time.
 
 var steps: Array = []
 var wait_frames := 0
 var wait_until := -1.0
 var drag := {}
 var busy := false
+var log_file: FileAccess
+var frame := 0
 
 
 func _ready() -> void:
@@ -19,6 +23,9 @@ func _ready() -> void:
 
 
 func _process(_delta: float) -> void:
+	frame += 1
+	if log_file:
+		_log_frame()
 	if busy or (steps.is_empty() and drag.is_empty()):
 		return
 	if not drag.is_empty():
@@ -78,9 +85,38 @@ func _process(_delta: float) -> void:
 			img.save_png(arg)
 			print("screenshot: ", arg)
 			busy = false
+		"spines":
+			for f in get_tree().current_scene.fishes:
+				if f.spine:
+					print("SPINE ", f.rec.species, " ", f.spine.describe())
+		"log":
+			log_file = FileAccess.open(arg, FileAccess.WRITE)
+			log_file.store_line("frame,t,id,species,x,y,z,speed,yaw,pitch,yaw_rate,roll,effort,anim_speed,hover,inside")
 		"quit":
+			if log_file:
+				log_file.close()
 			Game.save_game()
 			get_tree().quit()
+
+
+func _log_frame() -> void:
+	var main := get_tree().current_scene
+	var space: PhysicsDirectSpaceState3D = (main as Node3D).get_world_3d().direct_space_state
+	var probe := PhysicsShapeQueryParameters3D.new()
+	var sphere := SphereShape3D.new()
+	probe.shape = sphere
+	for f in main.fishes:
+		if f.dead:
+			continue
+		var p: Vector3 = f.position
+		var a: float = f.anim.speed_scale if f.anim else 0.0
+		# Is the fish's core inside wood, rock or a decoration?
+		sphere.radius = f.length * 0.12
+		probe.transform = Transform3D(Basis(), p)
+		var inside := 0 if space.intersect_shape(probe, 1).is_empty() else 1
+		log_file.store_line("%d,%.4f,%d,%s,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%d,%d" % [
+			frame, Game.sim_time, f.rec.id, f.rec.species, p.x, p.y, p.z, f.speed, f.yaw, f.pitch,
+			f.yaw_rate, f.roll, f.effort, a, 1 if f.hover_t > 0.0 else 0, inside])
 
 
 func _motion(pos: Vector2, rel: Vector2) -> void:
