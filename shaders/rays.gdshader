@@ -3,7 +3,7 @@ render_mode unshaded, blend_add, cull_disabled, depth_draw_never, shadows_disabl
 
 #include "res://shaders/noise.gdshaderinc"
 
-uniform vec3 color : source_color = vec3(1.0, 0.86, 0.55);
+uniform vec3 color : source_color = vec3(1.0, 0.97, 0.85);
 uniform float strength = 0.35;
 uniform float seed = 0.0;
 

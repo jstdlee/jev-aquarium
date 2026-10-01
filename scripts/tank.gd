@@ -71,12 +71,12 @@ func _build_camera_and_light() -> void:
 
 	env = Environment.new()
 	env.background_mode = Environment.BG_COLOR
-	env.background_color = Color(0.09, 0.11, 0.075)
+	env.background_color = Color(0.48, 0.44, 0.4)  # a bright, warm room around the tank
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = Color(0.36, 0.46, 0.36)
-	env.ambient_light_energy = 0.55
+	env.ambient_light_color = Color(0.78, 0.88, 0.9)
+	env.ambient_light_energy = 0.95
 	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
-	env.tonemap_exposure = 0.95
+	env.tonemap_exposure = 1.0
 	env.tonemap_white = 6.0
 	env.glow_enabled = true
 	env.glow_intensity = 0.55
@@ -84,31 +84,31 @@ func _build_camera_and_light() -> void:
 	env.glow_hdr_threshold = 0.9
 	env.fog_enabled = true
 	env.fog_mode = Environment.FOG_MODE_DEPTH
-	env.fog_light_color = Color(0.22, 0.3, 0.18)
-	env.fog_density = 0.35
+	env.fog_light_color = Color(0.62, 0.82, 0.86)
+	env.fog_density = 0.22
 	env.fog_depth_begin = 14.0
 	env.fog_depth_end = 30.0
 	env.fog_sky_affect = 0.0
 	env.adjustment_enabled = true
-	env.adjustment_saturation = 1.22
+	env.adjustment_saturation = 1.25
 	env.adjustment_contrast = 1.1
 	var we := WorldEnvironment.new()
 	we.environment = env
 	add_child(we)
 
 	var sun := DirectionalLight3D.new()
-	sun.light_color = Color(1.0, 0.88, 0.7)
-	sun.light_energy = 1.25
+	sun.light_color = Color(1.0, 0.96, 0.88)
+	sun.light_energy = 1.7
 	sun.shadow_enabled = true
-	sun.shadow_opacity = 0.65
+	sun.shadow_opacity = 0.45
 	sun.directional_shadow_max_distance = 40.0
 	sun.rotation_degrees = Vector3(-62, -28, 0)
 	add_child(sun)
 
 	var fill := OmniLight3D.new()
 	fill.position = Vector3(0, 4.0, 6.0)
-	fill.light_color = Color(0.7, 0.85, 0.75)
-	fill.light_energy = 0.6
+	fill.light_color = Color(0.9, 0.95, 1.0)
+	fill.light_energy = 0.9
 	fill.omni_range = 14.0
 	add_child(fill)
 
@@ -581,5 +581,5 @@ func _process(delta: float) -> void:
 	sand_mat.set_shader_parameter("cloudiness", cl)
 	back_mat.set_shader_parameter("cloudiness", cl)
 	surface_mat.set_shader_parameter("cloudiness", cl)
-	env.fog_density = 0.35 + cl * 1.2
+	env.fog_density = 0.22 + cl * 1.2
 	env.fog_depth_begin = lerpf(14.0, 8.0, cl)

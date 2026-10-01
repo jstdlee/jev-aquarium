@@ -9,7 +9,7 @@ uniform sampler2D normal_tex : hint_normal, filter_linear_mipmap, repeat_enable;
 uniform sampler2D rough_tex : hint_default_white, filter_linear_mipmap, repeat_enable;
 uniform sampler2D ao_tex : hint_default_white, filter_linear_mipmap, repeat_enable;
 uniform float tile = 0.28;
-uniform vec3 tint : source_color = vec3(1.08, 1.0, 0.9);
+uniform vec3 tint : source_color = vec3(1.0, 0.95, 0.86);
 uniform float cloudiness = 0.0;
 
 varying vec3 wpos;
@@ -23,7 +23,7 @@ void fragment() {
 	vec3 col = texture(albedo_tex, uv).rgb * tint;
 	// Toward the back the substrate is darker and richer, like aquasoil under plants.
 	float back = smoothstep(1.2, -2.4, wpos.z);
-	col = mix(col, col * vec3(0.55, 0.5, 0.4), back * 0.7);
+	col = mix(col, col * vec3(0.75, 0.72, 0.62), back * 0.5);
 	col = mix(col, col * vec3(0.8, 0.85, 0.65), cloudiness * 0.6);
 	ALBEDO = col;
 	NORMAL_MAP = texture(normal_tex, uv).rgb;
