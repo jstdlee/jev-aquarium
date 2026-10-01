@@ -7,7 +7,9 @@ const Z_HALF := 2.5
 const WATER_Y := 6.6
 const TOP_Y := 7.0
 
-const SAND := preload("res://shaders/sand.gdshader")
+const SAND := preload("res://shaders/sand_real.gdshader")
+const Scenery = preload("res://scripts/scenery.gd")
+const SAND_TEX := "res://assets/textures/coast_sand_01/coast_sand_01_"
 const BACKDROP := preload("res://shaders/backdrop.gdshader")
 const GLASS := preload("res://shaders/glass.gdshader")
 const SURFACE := preload("res://shaders/surface.gdshader")
@@ -19,6 +21,9 @@ const LEAF := preload("res://shaders/leaf.gdshader")
 const PARTICLE := preload("res://shaders/particle.gdshader")
 
 var camera: Camera3D
+var scenery: Node3D
+var reflect_vp: SubViewport
+var reflect_cam: Camera3D
 var env: Environment
 var sand_mat: ShaderMaterial
 var back_mat: ShaderMaterial
@@ -36,9 +41,9 @@ func _ready() -> void:
 	_build_floor()
 	_build_walls()
 	_build_surface()
-	_build_wood()
-	_build_rocks()
-	_build_plants()
+	scenery = Scenery.new()
+	add_child(scenery)
+	scenery.setup(self)
 	_build_rays()
 	_build_particles()
 	_build_leaves()
@@ -133,10 +138,20 @@ func _build_floor() -> void:
 	arr[Mesh.ARRAY_VERTEX] = verts
 	arr[Mesh.ARRAY_NORMAL] = norms
 	arr[Mesh.ARRAY_INDEX] = idx
-	var mesh := ArrayMesh.new()
-	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arr)
+	var uvs := PackedVector2Array()
+	for v in verts:
+		uvs.append(Vector2(v.x, v.z) * 0.28)
+	arr[Mesh.ARRAY_TEX_UV] = uvs
+	var st := SurfaceTool.new()
+	st.create_from_arrays(arr)
+	st.generate_tangents()
+	var mesh := st.commit()
 	sand_mat = ShaderMaterial.new()
 	sand_mat.shader = SAND
+	sand_mat.set_shader_parameter("albedo_tex", load(SAND_TEX + "Diffuse.jpg"))
+	sand_mat.set_shader_parameter("normal_tex", load(SAND_TEX + "nor_gl.jpg"))
+	sand_mat.set_shader_parameter("rough_tex", load(SAND_TEX + "Rough.jpg"))
+	sand_mat.set_shader_parameter("ao_tex", load(SAND_TEX + "AO.jpg"))
 	var mi := MeshInstance3D.new()
 	mi.mesh = mesh
 	mi.material_override = sand_mat
@@ -189,16 +204,42 @@ func _build_walls() -> void:
 
 
 func _build_surface() -> void:
+	# Mirror camera for the underside of the water (total internal reflection). It renders
+	# everything except the surface itself (layer 2) into a half-resolution texture.
+	reflect_vp = SubViewport.new()
+	reflect_vp.size = Vector2i(800, 450)
+	reflect_vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	add_child(reflect_vp)
+	reflect_cam = Camera3D.new()
+	reflect_cam.cull_mask = 1
+	reflect_cam.keep_aspect = Camera3D.KEEP_WIDTH
+	reflect_vp.add_child(reflect_cam)
 	surface_mat = ShaderMaterial.new()
 	surface_mat.shader = SURFACE
+	surface_mat.set_shader_parameter("reflect_tex", reflect_vp.get_texture())
 	var pm := PlaneMesh.new()
 	pm.size = Vector2(2.0 * X_HALF, 2.0 * Z_HALF)
 	var mi := MeshInstance3D.new()
 	mi.mesh = pm
 	mi.position = Vector3(0, WATER_Y, 0)
+	mi.layers = 2
 	mi.material_override = surface_mat
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(mi)
+
+
+func _update_reflection() -> void:
+	# Mirror the main camera about the water plane.
+	var p := camera.global_position
+	var target := p - camera.global_transform.basis.z
+	var mp := Vector3(p.x, 2.0 * WATER_Y - p.y, p.z)
+	var mt := Vector3(target.x, 2.0 * WATER_Y - target.y, target.z)
+	reflect_cam.fov = camera.fov
+	reflect_cam.global_transform = Transform3D(Basis(), mp).looking_at(mt, Vector3.UP)
+	var vsize := get_viewport().get_visible_rect().size
+	reflect_vp.size = Vector2i(maxi(64, int(vsize.x / 2)), maxi(36, int(vsize.y / 2)))
+	var vp: Projection = reflect_cam.get_camera_projection() * Projection(reflect_cam.global_transform.affine_inverse())
+	surface_mat.set_shader_parameter("reflect_vp", vp)
 
 
 func add_ripple(x: float, z: float, strength: float = 1.0) -> void:
@@ -533,6 +574,7 @@ func _process(delta: float) -> void:
 			m.set_shader_parameter("stir_pos", c.pos)
 			m.set_shader_parameter("stir_vel", c.vel * clampf(c.life / 1.6, 0.0, 1.0))
 
+	_update_reflection()
 	surface_mat.set_shader_parameter("ripples", ripples)
 	surface_mat.set_shader_parameter("now", Game.sim_time)
 	var cl := Game.cloudiness

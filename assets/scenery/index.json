@@ -1,0 +1,226 @@
+{
+ "vallisneria": {
+  "width": 0.8086,
+  "height": 0.9356,
+  "depth": 1.0,
+  "tris": 9000,
+  "source": "assets/raw/aquariumplants_java_fern_vallisneria_etc.glb"
+ },
+ "java_fern": {
+  "width": 1.0,
+  "height": 0.6255,
+  "depth": 0.9998,
+  "tris": 8999,
+  "source": "assets/raw/aquariumplants_java_fern_vallisneria_etc.glb"
+ },
+ "red_tiger_lotus": {
+  "width": 1.0,
+  "height": 0.6231,
+  "depth": 0.9441,
+  "tris": 7000,
+  "source": "assets/raw/aquariumplants_java_fern_vallisneria_etc.glb"
+ },
+ "staurogyne": {
+  "width": 1.0,
+  "height": 0.3901,
+  "depth": 0.9849,
+  "tris": 2500,
+  "source": "assets/raw/aquariumplants_java_fern_vallisneria_etc.glb"
+ },
+ "staurogyne_b": {
+  "width": 0.8911,
+  "height": 0.3838,
+  "depth": 1.0,
+  "tris": 2500,
+  "source": "assets/raw/aquariumplants_java_fern_vallisneria_etc.glb"
+ },
+ "pack_universal": {
+  "width": 0.9605,
+  "height": 0.8072,
+  "depth": 1.0,
+  "tris": 9000,
+  "source": "assets/raw/aquariumplants_java_fern_vallisneria_etc.glb"
+ },
+ "anubias": {
+  "width": 1.0,
+  "height": 0.85,
+  "depth": 0.984,
+  "tris": 40000,
+  "source": "assets/raw/aquariumplants_like_anubia_barteri.glb"
+ },
+ "driftwood": {
+  "width": 1.0,
+  "height": 0.3528,
+  "depth": 0.5307,
+  "tris": 40000,
+  "source": "assets/raw/real_aquarium_wood_3d_scan.glb"
+ },
+ "temple": {
+  "width": 0.6269,
+  "height": 1.0,
+  "depth": 0.6483,
+  "tris": 29999,
+  "source": "assets/raw/temple_ruin_aquarium_decoration_-_photoscan.glb"
+ },
+ "shell": {
+  "width": 0.6433,
+  "height": 0.5011,
+  "depth": 1.0,
+  "tris": 4886,
+  "source": "assets/raw/sea_shell_photogrammetry.glb"
+ },
+ "boulder": {
+  "width": 0.7026,
+  "height": 0.5495,
+  "depth": 1.0,
+  "tris": 26614,
+  "source": "assets/polyhaven/boulder_01/boulder_01.gltf"
+ },
+ "dragon_stones": {
+  "width": 1.0,
+  "height": 0.3486,
+  "depth": 0.4873,
+  "tris": 30000,
+  "source": "assets/polyhaven/namaqualand_boulder_02/namaqualand_boulder_02.gltf"
+ },
+ "trunk": {
+  "width": 1.0,
+  "height": 0.2609,
+  "depth": 0.2606,
+  "tris": 24999,
+  "source": "assets/polyhaven/dead_tree_trunk_02/dead_tree_trunk_02.gltf"
+ },
+ "quiver_branch": {
+  "width": 0.5811,
+  "height": 1.0,
+  "depth": 0.5174,
+  "tris": 14834,
+  "source": "assets/polyhaven/dead_quiver_branch_01/dead_quiver_branch_01.gltf"
+ },
+ "branch_a": {
+  "width": 0.2487,
+  "height": 0.2625,
+  "depth": 1.0,
+  "tris": 5933,
+  "source": "assets/polyhaven/dry_branches_medium_01/dry_branches_medium_01.gltf"
+ },
+ "branch_b": {
+  "width": 0.1456,
+  "height": 0.1366,
+  "depth": 1.0,
+  "tris": 5254,
+  "source": "assets/polyhaven/dry_branches_medium_01/dry_branches_medium_01.gltf"
+ },
+ "branch_c": {
+  "width": 0.168,
+  "height": 0.1843,
+  "depth": 1.0,
+  "tris": 5616,
+  "source": "assets/polyhaven/dry_branches_medium_01/dry_branches_medium_01.gltf"
+ },
+ "fern_big": {
+  "width": 1.0,
+  "height": 0.4321,
+  "depth": 0.9029,
+  "tris": 2384,
+  "source": "assets/polyhaven/fern_02/fern_02.gltf"
+ },
+ "fern_wide": {
+  "width": 1.0,
+  "height": 0.3992,
+  "depth": 0.8752,
+  "tris": 2248,
+  "source": "assets/polyhaven/fern_02/fern_02.gltf"
+ },
+ "moss_rock_1": {
+  "width": 0.6644,
+  "height": 0.4372,
+  "depth": 1.0,
+  "tris": 8000,
+  "source": "assets/polyhaven/rock_moss_set_01/rock_moss_set_01.gltf"
+ },
+ "moss_rock_2": {
+  "width": 0.8136,
+  "height": 0.3872,
+  "depth": 1.0,
+  "tris": 7999,
+  "source": "assets/polyhaven/rock_moss_set_01/rock_moss_set_01.gltf"
+ },
+ "moss_rock_3": {
+  "width": 1.0,
+  "height": 0.5215,
+  "depth": 0.9862,
+  "tris": 5000,
+  "source": "assets/polyhaven/rock_moss_set_01/rock_moss_set_01.gltf"
+ },
+ "moss_rock_4": {
+  "width": 1.0,
+  "height": 0.8313,
+  "depth": 0.9232,
+  "tris": 7999,
+  "source": "assets/polyhaven/rock_moss_set_01/rock_moss_set_01.gltf"
+ },
+ "moss_rock_5": {
+  "width": 0.606,
+  "height": 0.4023,
+  "depth": 1.0,
+  "tris": 8000,
+  "source": "assets/polyhaven/rock_moss_set_01/rock_moss_set_01.gltf"
+ },
+ "moss_rock_6": {
+  "width": 0.771,
+  "height": 0.4576,
+  "depth": 1.0,
+  "tris": 8000,
+  "source": "assets/polyhaven/rock_moss_set_01/rock_moss_set_01.gltf"
+ },
+ "moss_stone_7": {
+  "width": 1.0,
+  "height": 0.4398,
+  "depth": 0.7175,
+  "tris": 6000,
+  "source": "assets/polyhaven/rock_moss_set_02/rock_moss_set_02.gltf"
+ },
+ "moss_stone_8": {
+  "width": 1.0,
+  "height": 0.439,
+  "depth": 0.815,
+  "tris": 5999,
+  "source": "assets/polyhaven/rock_moss_set_02/rock_moss_set_02.gltf"
+ },
+ "moss_stone_9": {
+  "width": 1.0,
+  "height": 0.374,
+  "depth": 0.6209,
+  "tris": 6000,
+  "source": "assets/polyhaven/rock_moss_set_02/rock_moss_set_02.gltf"
+ },
+ "moss_stone_10": {
+  "width": 1.0,
+  "height": 0.3486,
+  "depth": 0.7039,
+  "tris": 5999,
+  "source": "assets/polyhaven/rock_moss_set_02/rock_moss_set_02.gltf"
+ },
+ "moss_stone_11": {
+  "width": 1.0,
+  "height": 0.6708,
+  "depth": 0.782,
+  "tris": 6000,
+  "source": "assets/polyhaven/rock_moss_set_02/rock_moss_set_02.gltf"
+ },
+ "moss_stone_12": {
+  "width": 1.0,
+  "height": 0.466,
+  "depth": 0.9137,
+  "tris": 6000,
+  "source": "assets/polyhaven/rock_moss_set_02/rock_moss_set_02.gltf"
+ },
+ "moss_stone_13": {
+  "width": 1.0,
+  "height": 0.6008,
+  "depth": 0.5442,
+  "tris": 5999,
+  "source": "assets/polyhaven/rock_moss_set_02/rock_moss_set_02.gltf"
+ }
+}

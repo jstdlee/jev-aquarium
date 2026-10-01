@@ -265,6 +265,14 @@ func _steer(delta: float) -> Vector3:
 		desired += (coh / n) * 0.6 * school
 	desired += sep * 1.4
 
+	# Steer around rocks and wood.
+	for o in world.tank.scenery.obstacles:
+		var away: Vector3 = p - o.pos
+		var reach: float = float(o.radius) + length * 0.5 + 0.3
+		var dist := away.length()
+		if dist < reach and dist > 0.001:
+			desired += away / dist * (reach - dist) * 4.0
+
 	# Soft walls and floor.
 	var floor_y: float = world.tank.floor_height(p.x, p.z) + 0.25 + length * 0.2
 	if p.x > 5.4 - length * 0.3: desired.x -= (p.x - 5.4 + length * 0.3) * 3.0 + 1.0

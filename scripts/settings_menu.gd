@@ -88,7 +88,7 @@ func _ready() -> void:
 	v.add_child(hint)
 
 	var credits := Label.new()
-	credits.text = "Fish models: somitsu, BlueMesh, Comitre (CC BY 4.0). Full list in CREDITS.md."
+	credits.text = "Models: somitsu, BlueMesh, Comitre, Nullifiedit, zdenkoroman, DonCoasn, meshfinder (CC BY 4.0); scans from Poly Haven (CC0). Full list in CREDITS.md."
 	credits.add_theme_font_size_override("font_size", 12)
 	credits.add_theme_color_override("font_color", Color(0.6, 0.65, 0.58))
 	v.add_child(credits)

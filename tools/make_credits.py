@@ -16,4 +16,7 @@ with open(os.path.join(root, "CREDITS.md"), "w") as out:
     out.write("| Model | Author | License | Source |\n|---|---|---|---|\n")
     for t, a, l, s in rows:
         out.write(f"| {t} | {a} | {l} | {s} |\n")
+    ph = sorted(os.listdir(os.path.join(root, "assets", "polyhaven"))) + sorted(os.listdir(os.path.join(root, "assets", "textures")))
+    out.write("\nScanned rocks, wood, plants and ground textures from [Poly Haven](https://polyhaven.com), CC0 (no attribution required, credited with thanks): ")
+    out.write(", ".join(ph) + ".\n")
 print(f"{len(rows)} models credited")

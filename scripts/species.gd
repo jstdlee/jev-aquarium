@@ -12,7 +12,7 @@ const DATA := {
 	"goldfish": {
 		"name": "Jikin Goldfish",
 		"model": {"path": "res://assets/raw/jikin_goldfish.glb", "yaw": 180.0, "center": Vector3(2.09, 0.09, -3.25), "size": 13.1, "anim_speed": 1.0},
-		"length": 1.6, "height_ratio": 0.5, "width_ratio": 0.62, "peak": 0.38, "stem": 0.22,
+		"length": 1.25, "height_ratio": 0.5, "width_ratio": 0.62, "peak": 0.38, "stem": 0.22,
 		"belly_drop": 0.35, "blunt": 0.35,
 		"tail": {"type": "twin", "len": 0.8, "spread": 0.95},
 		"dorsal": {"t0": 0.3, "t1": 0.64, "h": 0.5},
@@ -28,7 +28,7 @@ const DATA := {
 	"oranda": {
 		"name": "Redcap Oranda",
 		"model": {"path": "res://assets/raw/redcap_oranda_goldfish.glb", "yaw": 180.0, "center": Vector3(0.72, -1.6, -4.56), "size": 13.8, "anim_speed": 0.9},
-		"length": 1.6, "height_ratio": 0.66, "width_ratio": 0.8, "peak": 0.42, "stem": 0.24,
+		"length": 1.35, "height_ratio": 0.66, "width_ratio": 0.8, "peak": 0.42, "stem": 0.24,
 		"belly_drop": 0.45, "blunt": 0.6,
 		"tail": {"type": "twin", "len": 0.55, "spread": 0.85},
 		"dorsal": {},
