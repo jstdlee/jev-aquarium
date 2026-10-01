@@ -3,6 +3,7 @@ extends Node
 ## Usage: godot ... -- --steps="wait:30;move:800,400;dclick:800,400;shot:/tmp/a.png;quit"
 ## Steps: wait:N (frames)  sleep:S (seconds)  move:x,y  click:x,y  dclick:x,y  tclick:x,y
 ##        drag:x1,y1,x2,y2,frames  key:esc|f1  speed:N  shot:path  quit
+##        stock:goldfish=1,neon=8  (fixed population)   cam:x,y,z,fov  (move the camera, for close-ups)
 
 var steps: Array = []
 var wait_frames := 0
@@ -58,6 +59,18 @@ func _process(_delta: float) -> void:
 			Input.parse_input_event(ev)
 		"speed":
 			Game.settings.time_scale = float(arg)
+		"stock":
+			Game.settings.population_mode = "fixed"
+			for id in Game.settings.fixed_counts:
+				Game.settings.fixed_counts[id] = 0
+			for kv in arg.split(","):
+				var p := kv.split("=")
+				Game.settings.fixed_counts[p[0]] = int(p[1])
+			Game.generate_population()
+		"cam":
+			var cam := get_viewport().get_camera_3d()
+			cam.position = Vector3(nums[0], nums[1], nums[2])
+			cam.fov = nums[3]
 		"shot":
 			busy = true
 			await RenderingServer.frame_post_draw

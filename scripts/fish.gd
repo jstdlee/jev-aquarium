@@ -31,6 +31,12 @@ var fade := 1.0
 var mats: Array = []
 var label: Label3D
 var length := 1.0
+# Artist model (when the species has one): its animation and materials for hunger tint and fade.
+var anim: AnimationPlayer
+var anim_base := 1.0
+var model_mats: Array = []  # [material, original albedo colour]
+var _shown_vitality := 1.0
+var _shown_fade := 1.0
 
 
 func setup(record: Dictionary, main: Node, start: Vector3) -> void:
@@ -40,6 +46,51 @@ func setup(record: Dictionary, main: Node, start: Vector3) -> void:
 	length = spec.length
 	personality = randf_range(0.85, 1.15)
 	phase = randf() * TAU
+	if spec.has("model"):
+		_setup_model(spec.model)
+	else:
+		_setup_procedural()
+	position = start
+	vel = Vector3(randf_range(-1, 1), 0, randf_range(-0.2, 0.2)).normalized() * float(spec.speed)
+	_pick_target()
+	label = Label3D.new()
+	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	label.font_size = 28
+	label.pixel_size = 0.004
+	label.no_depth_test = true
+	label.visible = false
+	add_child(label)
+
+
+func _setup_model(m: Dictionary) -> void:
+	var scene: PackedScene = load(m.path)
+	var model: Node3D = scene.instantiate()
+	# Turn the head to -Z, centre the rest pose on this node and scale to the tank length.
+	var holder := Node3D.new()
+	var s: float = length / float(m.size)
+	holder.transform = Transform3D(Basis(Vector3.UP, deg_to_rad(float(m.yaw))).scaled(Vector3.ONE * s), Vector3.ZERO)
+	model.position = -m.center
+	holder.add_child(model)
+	add_child(holder)
+	anim = model.find_child("AnimationPlayer", true, false) as AnimationPlayer
+	if anim and not anim.get_animation_list().is_empty():
+		var anim_name: StringName = anim.get_animation_list()[0]
+		anim.get_animation(anim_name).loop_mode = Animation.LOOP_LINEAR
+		anim.play(anim_name)
+		anim.seek(randf() * anim.current_animation_length, true)
+		anim_base = float(m.get("anim_speed", 1.0))
+	for mi in model.find_children("*", "MeshInstance3D", true, false):
+		var gi := mi as MeshInstance3D
+		gi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+		for i in gi.mesh.get_surface_count():
+			var mat := gi.get_active_material(i)
+			if mat is BaseMaterial3D:
+				var dup: BaseMaterial3D = mat.duplicate()
+				gi.set_surface_override_material(i, dup)
+				model_mats.append([dup, dup.albedo_color, dup.transparency])
+
+
+func _setup_procedural() -> void:
 	var info := FishMesh.build(spec)
 	var mi := MeshInstance3D.new()
 	mi.mesh = info.mesh
@@ -68,16 +119,6 @@ func setup(record: Dictionary, main: Node, start: Vector3) -> void:
 		m.set_shader_parameter("body_len", float(info.length))
 		m.set_shader_parameter("head_z", float(info.head_z))
 		m.set_shader_parameter("wave_k", float(spec.wave_k))
-	position = start
-	vel = Vector3(randf_range(-1, 1), 0, randf_range(-0.2, 0.2)).normalized() * float(spec.speed)
-	_pick_target()
-	label = Label3D.new()
-	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	label.font_size = 28
-	label.pixel_size = 0.004
-	label.no_depth_test = true
-	label.visible = false
-	add_child(label)
 
 
 func _pick_target() -> void:
@@ -284,6 +325,20 @@ func _update_visuals(delta: float) -> void:
 		vitality = lerpf(0.25, 1.0, rec.satiety / Game.STAGE_HUNGRY)
 	if dead:
 		vitality = 0.15
+	if anim:
+		anim.speed_scale = 0.0 if dead else anim_base * (0.5 + 1.3 * effort) * (1.0 + wiggle * 0.8)
+	if model_mats.size() > 0 and (absf(vitality - _shown_vitality) > 0.02 or absf(fade - _shown_fade) > 0.01):
+		_shown_vitality = vitality
+		_shown_fade = fade
+		for e in model_mats:
+			var mat: BaseMaterial3D = e[0]
+			var orig: Color = e[1]
+			# Hungry fish grow pale; dead fish fade out.
+			var c := orig.lerp(Color(0.62, 0.66, 0.7, orig.a), 1.0 - vitality)
+			c.a = orig.a * fade
+			mat.albedo_color = c
+			if fade < 1.0:
+				mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	for m in mats:
 		m.set_shader_parameter("swim_phase", phase)
 		m.set_shader_parameter("swim_amp", amp)

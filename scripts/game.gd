@@ -176,7 +176,8 @@ func generate_population() -> void:
 					continue
 				pick -= float(SpeciesDB.get_spec(id).weight)
 				if pick <= 0.0:
-					counts[id] += 1
+					if counts[id] < int(SpeciesDB.get_spec(id).get("max_count", 99)):
+						counts[id] += 1
 					break
 			placed += 1
 	var n := 0
@@ -247,7 +248,10 @@ func load_game() -> bool:
 	var data: Dictionary = parsed
 	for k in data.get("settings", {}):
 		settings[k] = data.settings[k]
-	fish_records = data.get("fish", [])
+	for id in SpeciesDB.ORDER:
+		if not settings.fixed_counts.has(id):
+			settings.fixed_counts[id] = SpeciesDB.get_spec(id).default_count
+	fish_records = data.get("fish", []).filter(func(r): return SpeciesDB.has(r.species))
 	memorial = data.get("memorial", [])
 	cloudiness = float(data.get("cloudiness", 0.0))
 	next_id = int(data.get("next_id", 1))

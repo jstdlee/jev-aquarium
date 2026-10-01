@@ -87,6 +87,12 @@ func _ready() -> void:
 	hint.add_theme_color_override("font_color", Color(0.7, 0.75, 0.68))
 	v.add_child(hint)
 
+	var credits := Label.new()
+	credits.text = "Fish models: somitsu, BlueMesh, Comitre (CC BY 4.0). Full list in CREDITS.md."
+	credits.add_theme_font_size_override("font_size", 12)
+	credits.add_theme_color_override("font_color", Color(0.6, 0.65, 0.58))
+	v.add_child(credits)
+
 	var buttons := HBoxContainer.new()
 	buttons.alignment = BoxContainer.ALIGNMENT_END
 	var resume := Button.new()
