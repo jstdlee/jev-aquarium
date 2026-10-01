@@ -1,8 +1,11 @@
 extends SkeletonModifier3D
-## Procedural swimming for artist fish models. Instead of looping the canned clip, the real spine
-## bones are bent every frame: a travelling wave from head to tail whose strength follows the fish's
-## kick envelope, a curve into turns, and pectoral fins that scull. Spine and fins are found
-## automatically from the rest pose, so it works on any fish skeleton without per-model setup.
+## Live swimming for artist fish models. The artist's swim clip keeps playing (it carries the fin,
+## gill and tail-fin life), and this modifier, which runs after it each frame:
+##  - scales the clip's strength: every bone is blended between its average "neutral" pose
+##    (measured from the clip) and the animated pose, so a gliding fish beats gently and a kicking
+##    fish beats fully, smoothly in between;
+##  - curves the spine into turns, like a real fish bending its body around a corner.
+## The spine is found from bone names or the longest head-to-tail centreline path.
 
 var fish: Node3D  # fish.gd: provides phase, effort, turn_bend, hover_t, length
 var tail_angle := 0.45  # radians of total bend at the tail at full effort
@@ -10,6 +13,10 @@ var chain: Array[int] = []  # spine bones, head to tail
 var chain_s: Array[float] = []  # 0 at the head end of the chain, 1 at the tail end
 var fins: Array[int] = []  # pectoral fins
 var fin_side: Array[float] = []
+var neutral: Array[Quaternion] = []  # per bone: average pose over one cycle of the clip
+var bend_enabled := true
+# Body wave for fish whose clip doesn't really swim: tail swing in body lengths (0 = use the clip).
+var wave_tail := 0.0
 
 
 func setup(f: Node3D, amount: float) -> void:
@@ -89,7 +96,72 @@ func _depth(skel: Skeleton3D, i: int) -> int:
 	return d
 
 
+## Sample the clip over one loop and average each bone's rotation: the pose the beat swings around.
+func capture_neutral(anim: AnimationPlayer) -> void:
+	var skel := get_skeleton()
+	var n := skel.get_bone_count()
+	var sums: Array[Vector4] = []
+	sums.resize(n)
+	var first: Array[Quaternion] = []
+	first.resize(n)
+	var length := anim.current_animation_length
+	var samples := 24
+	for k in samples:
+		anim.seek(length * k / samples, true)
+		for b in n:
+			var q := skel.get_bone_pose_rotation(b)
+			if k == 0:
+				first[b] = q
+				sums[b] = Vector4.ZERO
+			if q.dot(first[b]) < 0.0:
+				q = -q  # keep all samples on the same hemisphere before averaging
+			sums[b] += Vector4(q.x, q.y, q.z, q.w)
+	neutral.resize(n)
+	for b in n:
+		var v := sums[b].normalized()
+		neutral[b] = Quaternion(v.x, v.y, v.z, v.w)
+
+
 func _process_modification() -> void:
+	var skel := get_skeleton()
+	if skel == null or fish == null:
+		return
+	# 1) Strength of the swim beat: 0 = neutral pose, 1 = the artist's full clip.
+	#    Fish with a procedural body wave keep their clip at full strength for the fins.
+	var amp: float = 1.0 if wave_tail > 0.0 else clampf(fish.beat_amp, 0.0, 1.0)
+	if neutral.size() == skel.get_bone_count() and amp < 0.999:
+		for b in neutral.size():
+			skel.set_bone_pose_rotation(b, neutral[b].slerp(skel.get_bone_pose_rotation(b), amp))
+	# 2) Curve the body into turns.
+	if not bend_enabled or chain.is_empty():
+		return
+	var up_skel := (skel.global_basis.inverse() * fish.global_basis.y).normalized()
+	var bend: float = clampf(fish.turn_bend, -0.8, 0.8)
+	var wave_a: float = wave_tail * clampf(fish.beat_amp, 0.0, 1.2)
+	var prev_theta := 0.0
+	for k in chain.size():
+		# Turn: more curvature toward the tail, a C-shape around the corner.
+		var a := bend * (0.35 + 0.65 * chain_s[k]) / chain.size() * 1.6
+		if wave_tail > 0.0:
+			# Lighthill travelling wave h(s,t) = A(s) sin(k s - w t), A(s) = A_tail (0.1 s + 0.9 s^2),
+			# wavelength ~ one body length. Each joint turns by the change of the body's slope there.
+			var sb := 0.15 + 0.85 * chain_s[k]  # position along the body, 0 = snout, 1 = tail tip
+			var theta := _slope(sb, wave_a, fish.phase)
+			a += theta - prev_theta
+			prev_theta = theta
+		_rotate_bone(skel, chain[k], up_skel, a)
+
+
+## Angle of the body midline at body position s (0 snout .. 1 tail) for a Lighthill wave.
+func _slope(s: float, a_tail: float, phase: float) -> float:
+	var kw := TAU / 1.0  # wavelength = one body length
+	var amp := a_tail * (0.1 * s + 0.9 * s * s)
+	var damp := a_tail * (0.1 + 1.8 * s)
+	var dh := damp * sin(kw * s - phase) + amp * kw * cos(kw * s - phase)
+	return atan(dh)
+
+
+func _old_procedural_wave() -> void:
 	var skel := get_skeleton()
 	if skel == null or fish == null or chain.is_empty():
 		return
@@ -124,3 +196,26 @@ func describe() -> String:
 	var skel := get_skeleton()
 	var names := chain.map(func(i): return skel.get_bone_name(i))
 	return "chain %d %s | fins %d" % [chain.size(), names, fins.size()]
+
+
+## Dev helper: how many side-to-side tail beats one loop of the clip contains, and its length.
+func measure_beats(anim: AnimationPlayer) -> String:
+	var skel := get_skeleton()
+	if chain.is_empty():
+		return "no chain"
+	var tail := chain[-1]
+	var length := anim.current_animation_length
+	var xs: Array[float] = []
+	for k in 96:
+		anim.seek(length * k / 96.0, true)
+		var g := skel.global_transform * skel.get_bone_global_pose(tail)
+		xs.append((fish.global_transform.affine_inverse() * g.origin).x)
+	var mean := 0.0
+	for x in xs:
+		mean += x / xs.size()
+	var crossings := 0
+	for k in xs.size():
+		if signf(xs[k] - mean) != signf(xs[(k + 1) % xs.size()] - mean):
+			crossings += 1
+	var amp: float = (xs.max() - xs.min()) / 2.0 / fish.length
+	return "clip %.2fs, %d beats, tail swing %.2f body lengths, %.2f Hz" % [length, crossings / 2, amp, crossings / 2.0 / length]

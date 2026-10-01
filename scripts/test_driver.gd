@@ -13,6 +13,7 @@ var wait_until := -1.0
 var drag := {}
 var busy := false
 var log_file: FileAccess
+var follow_species := ""
 var frame := 0
 
 
@@ -26,6 +27,8 @@ func _process(_delta: float) -> void:
 	frame += 1
 	if log_file:
 		_log_frame()
+	if follow_species != "":
+		_follow()
 	if busy or (steps.is_empty() and drag.is_empty()):
 		return
 	if not drag.is_empty():
@@ -85,6 +88,12 @@ func _process(_delta: float) -> void:
 			img.save_png(arg)
 			print("screenshot: ", arg)
 			busy = false
+		"follow":
+			follow_species = arg
+		"beats":
+			for f in get_tree().current_scene.fishes:
+				if f.spine and f.anim:
+					print("BEATS ", f.rec.species, " ", f.spine.measure_beats(f.anim))
 		"spines":
 			for f in get_tree().current_scene.fishes:
 				if f.spine:
@@ -117,6 +126,20 @@ func _log_frame() -> void:
 		log_file.store_line("%d,%.4f,%d,%s,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%d,%d" % [
 			frame, Game.sim_time, f.rec.id, f.rec.species, p.x, p.y, p.z, f.speed, f.yaw, f.pitch,
 			f.yaw_rate, f.roll, f.effort, a, 1 if f.hover_t > 0.0 else 0, inside])
+
+
+## Close-up camera that tracks the first fish of a species from a little in front of the glass.
+func _follow() -> void:
+	var main := get_tree().current_scene
+	for f in main.fishes:
+		if f.rec.species == follow_species and not f.dead:
+			var cam := get_viewport().get_camera_3d()
+			var L: float = f.length
+			cam.fov = 40.0
+			var target: Vector3 = f.global_position
+			cam.global_position = cam.global_position.lerp(target + Vector3(0, L * 0.6, L * 3.4), 0.2)
+			cam.look_at(target, Vector3.UP)
+			return
 
 
 func _motion(pos: Vector2, rel: Vector2) -> void:

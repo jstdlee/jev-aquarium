@@ -28,7 +28,9 @@ var effort := 0.0  # 0 = gliding or hovering, 1 = hard swimming; drives the tail
 var hover_t := 0.0
 var hover_cool := 4.0
 var holder: Node3D
-var spine: SkeletonModifier3D  # procedural spine and fins (artist models)
+var spine: SkeletonModifier3D  # beat strength and turn curvature (artist models)
+var beat_amp := 0.6  # strength of the swim beat, smoothed (read by swim_spine.gd)
+var beat_hz := 1.2  # current tail-beat frequency, smoothed
 var holder_basis := Basis()
 var target := Vector3.ZERO
 var wander_t := 0.0
@@ -68,7 +70,7 @@ func setup(record: Dictionary, main: Node, start: Vector3) -> void:
 	else:
 		_setup_procedural()
 	position = start
-	if spine:
+	if spine and spine.bend_enabled:
 		spine.find_bones()
 	yaw = randf_range(0.0, TAU)
 	speed = float(spec.speed) * 0.5
@@ -89,26 +91,36 @@ func _setup_model(m: Dictionary) -> void:
 	# Turn the head to -Z, centre the rest pose on this node and scale to the tank length.
 	holder = Node3D.new()
 	var s: float = length / float(m.size)
-	holder_basis = Basis(Vector3.UP, deg_to_rad(float(m.yaw))).scaled(Vector3.ONE * s)
+	# "fix" turns a re-exported model back to the original file's orientation (tools/bake_swim.py
+	# exports some rigs from their upright bind pose); "center" is measured on the original file.
+	var fix := Basis.from_euler(Vector3(m.get("fix", Vector3.ZERO)) * (PI / 180.0))
+	holder_basis = (Basis(Vector3.UP, deg_to_rad(float(m.yaw))) * fix).scaled(Vector3.ONE * s)
 	holder.transform = Transform3D(holder_basis, Vector3.ZERO)
-	model.position = -m.center
+	model.position = -(fix.inverse() * Vector3(m.center))
 	holder.add_child(model)
 	add_child(holder)
 	anim = model.find_child("AnimationPlayer", true, false) as AnimationPlayer
 	if anim and not anim.get_animation_list().is_empty():
+		# Prefer the baked "Swim" cycle (tools/bake_swim.py) over the artist's original clip.
 		var anim_name: StringName = anim.get_animation_list()[0]
+		for nm in anim.get_animation_list():
+			if String(nm).to_lower().contains("swim"):
+				anim_name = nm
 		anim.get_animation(anim_name).loop_mode = Animation.LOOP_LINEAR
 		anim.play(anim_name)
 		anim.seek(randf() * anim.current_animation_length, true)
 		anim_base = float(m.get("anim_speed", 1.0))
 	var skels := model.find_children("*", "Skeleton3D", true, false)
-	if not skels.is_empty() and anim and bool(spec.get("procedural", true)):
-		# Procedural swimming replaces the canned loop: hold its first pose and bend the spine live.
-		anim.seek(0.0, true)
-		anim.speed_scale = 0.0
+	if not skels.is_empty() and anim:
+		# The clip keeps playing; the modifier scales its strength and bends the body into turns.
 		spine = SwimSpine.new()
 		skels[0].add_child(spine)
 		spine.setup(self, float(spec.get("spine", 0.45)))
+		spine.bend_enabled = bool(spec.get("procedural", true))
+		spine.wave_tail = float(spec.get("wave", 0.0))
+		var t0 := anim.current_animation_position
+		spine.capture_neutral(anim)
+		anim.seek(t0, true)
 	for mi in model.find_children("*", "MeshInstance3D", true, false):
 		var gi := mi as MeshInstance3D
 		gi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
@@ -162,7 +174,7 @@ func _setup_procedural() -> void:
 func _pick_target() -> void:
 	var d: Vector2 = spec.depth
 	var x := randf_range(-5.0, 5.0)
-	var z := randf_range(-1.6, 1.3)
+	var z := randf_range(-1.9, 1.6)
 	if float(spec.school) > 0.5:
 		target = world.school_target(rec.species) + Vector3(randf_range(-0.8, 0.8), randf_range(-0.4, 0.4), randf_range(-0.5, 0.5))
 	else:
@@ -257,8 +269,10 @@ func _locomote(desired: Vector3, delta: float) -> void:
 	# Tail effort follows the kick; while coasting the fins keep a slow idle beat.
 	var want_effort := env * clampf(0.5 + kick_power / (max_speed * drag * 2.0), 0.4, 1.4) + (0.12 if hover_t <= 0.0 else 0.22)
 	effort = lerpf(effort, want_effort, 1.0 - exp(-delta * 4.0))
+	# Each tail stroke pushes: real fish surge forward twice per beat instead of sliding evenly.
+	var surge := 1.0 + 0.22 * beat_amp * sin(2.0 * phase) * clampf(effort + 0.3, 0.0, 1.0)
 	vel = heading * speed
-	position += vel * delta
+	position += vel * surge * delta
 
 	# Orientation: face the heading, bank gently into turns.
 	var want_roll := clampf(-yaw_rate * 0.18 * clampf(speed / max_speed + 0.3, 0.0, 1.0), -0.35, 0.35)
@@ -389,8 +403,8 @@ func _steer(delta: float) -> Vector3:
 	if p.y < floor_y + 0.3: desired.y += (floor_y + 0.3 - p.y) * 4.0
 
 	desired += Game.current_at(p) * 0.9
-	# Prefer swimming across the glass so fish show their side.
-	desired.z *= 0.6
+	# Mild preference for showing a side, but fish still swim toward and away from the glass.
+	desired.z *= 0.85
 	return desired
 
 
@@ -445,10 +459,17 @@ func _eat(food: Node3D) -> void:
 
 func _update_visuals(delta: float) -> void:
 	var e := clampf(effort, 0.0, 1.4)
-	var freq: float = float(spec.freq) * (0.35 + 1.1 * e) * (1.0 + wiggle * 0.8)
-	if dead:
-		freq = 0.0
-	phase += TAU * freq * delta
+	# Tail-beat frequency rises with speed (Bainbridge: f grows linearly with body lengths per second)
+	# and with effort; a kick beats faster than a glide.
+	var want_hz := float(spec.get("beat_hz", 1.5)) * (1.0 + 0.8 * speed / length) * (0.8 + 0.35 * e) * (1.0 + wiggle * 0.5)
+	beat_hz = lerpf(beat_hz, 0.0 if dead else want_hz, 1.0 - exp(-delta * 2.5))
+	var clip_hz := float(spec.get("clip_hz", 0.0))
+	var wave_fish := float(spec.get("wave", 0.0)) > 0.0
+	if anim and clip_hz > 0.0 and not wave_fish and anim.current_animation_length > 0.0:
+		# One rhythm for everything: the phase follows the artist clip's own tail beat.
+		phase = TAU * anim.current_animation_position * clip_hz
+	else:
+		phase += TAU * beat_hz * delta
 	var amp: float = float(spec.amp) * (0.35 + 0.9 * e) * (1.0 + wiggle * 0.6)
 	if dead:
 		amp = 0.0
@@ -457,10 +478,18 @@ func _update_visuals(delta: float) -> void:
 		vitality = lerpf(0.25, 1.0, rec.satiety / Game.STAGE_HUNGRY)
 	if dead:
 		vitality = 0.15
-	if anim and not spine:
-		# Gliding fish barely move their tail; kicking fish beat it fast.
-		var want_anim := 0.0 if dead else anim_base * (0.25 + 1.1 * e) * (1.0 + wiggle * 0.6)
-		anim.speed_scale = lerpf(anim.speed_scale, want_anim, 1.0 - exp(-delta * 3.0))
+	if anim:
+		# Real fish never stop beating: the rhythm rises smoothly with effort (about 1.3 Hz idling
+		# to 3 Hz cruising) and the beat grows from a gentle sway to a full sweep.
+		var want_anim := 0.0
+		if not dead:
+			if clip_hz > 0.0 and not wave_fish:
+				want_anim = beat_hz / clip_hz  # play the clip at the real tail frequency
+			else:
+				want_anim = float(spec.get("clip_speed", 1.0))  # clip only carries fin motion
+		anim.speed_scale = lerpf(anim.speed_scale, want_anim, 1.0 - exp(-delta * 2.5))
+		var want_amp := 0.0 if dead else clampf(0.4 + 0.6 * e + wiggle * 0.2, 0.0, 1.0)
+		beat_amp = lerpf(beat_amp, want_amp, 1.0 - exp(-delta * 3.0))
 	if holder and not dead:
 		# The head sways a little with every tail beat.
 		var sway := sin(phase) * 0.05 * (0.3 + e)
